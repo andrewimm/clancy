@@ -68,12 +68,44 @@ None
 ### Remaining for Phase 2
 None - Phase 2 complete!
 
-## Future Phases
+## Phase 3: Automated Note Extraction
 
-### Phase 3: Automated Note Extraction
-- Claude API client integration
-- Note extraction after each task
-- Automatic merging into note files
+### Completed
+- Added reqwest and tokio dependencies for async HTTP client
+- Created `extraction.rs` module with:
+  - `ExtractionResult` struct for parsed note updates
+  - `extract_notes()` async function to call Claude API
+  - `build_extraction_prompt()` using template from DESIGN.md
+  - `format_transcript_for_extraction()` to prepare transcript text
+  - `call_claude_api()` for HTTP requests to Anthropic API
+  - `parse_extraction_response()` to extract notes from Claude's response
+  - `apply_extraction()` to merge notes into project files
+- Note extraction prompt includes:
+  - Existing notes from all four categories
+  - Formatted transcript with task prompt, messages, tool usage
+  - Instructions for each category (architecture, decisions, failures, plan)
+- Integrated extraction into REPL task flow:
+  - Runs automatically after each task completion
+  - Uses tokio runtime for async-in-sync execution
+  - Displays progress: "Extracting notes... updated: architecture, plan"
+  - Gracefully handles API errors without failing the task
+- Notes handling:
+  - Architecture, decisions, failures: appended to existing notes
+  - Plan: replaced entirely (as per DESIGN.md)
+- Added 3 unit tests for response parsing
+- All 14 tests passing
+
+### Configuration
+- API key from environment variable (default: ANTHROPIC_API_KEY)
+- Model configurable in config.toml (default: claude-sonnet-4-20250514)
+
+### In Progress
+None
+
+### Remaining for Phase 3
+None - Phase 3 complete!
+
+## Future Phases
 
 ### Phase 4: Polish
 - Conversation continuity modes (/continue, /compact)

@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 use crate::config;
+use crate::extraction::{apply_extraction, extract_notes};
 use crate::project::{Project, NOTE_CATEGORIES};
 use crate::transcript::Transcript;
 
@@ -228,8 +229,12 @@ impl Session {
             .duration_ms()
             .map(|d| format!(" in {:.1}s", d as f64 / 1000.0))
             .unwrap_or_default();
-        println!("[Task {} complete{}{}]\n", task_num, duration_str, cost_str);
+        println!("[Task {} complete{}{}]", task_num, duration_str, cost_str);
 
+        // Run note extraction
+        self.run_extraction(&transcript, prompt);
+
+        println!();
         Ok(())
     }
 
@@ -273,6 +278,43 @@ impl Session {
         std::fs::write(&path, content)?;
 
         Ok(())
+    }
+
+    /// Runs note extraction on the transcript
+    fn run_extraction(&self, transcript: &Transcript, prompt: &str) {
+        print!("Extracting notes...");
+        std::io::stdout().flush().ok();
+
+        // Create a tokio runtime for the async extraction
+        let rt = match tokio::runtime::Runtime::new() {
+            Ok(rt) => rt,
+            Err(e) => {
+                println!(" error creating runtime: {}", e);
+                return;
+            }
+        };
+
+        // Run the async extraction
+        let result = rt.block_on(extract_notes(&self.project, transcript, prompt));
+
+        match result {
+            Ok(extraction) => {
+                if extraction.has_updates() {
+                    // Apply the extracted notes
+                    if let Err(e) = apply_extraction(&self.project, &extraction) {
+                        println!(" error applying notes: {}", e);
+                    } else {
+                        println!(" updated: {}", extraction.summary());
+                    }
+                } else {
+                    println!(" no updates");
+                }
+            }
+            Err(e) => {
+                // Don't fail the task if extraction fails
+                println!(" error: {}", e);
+            }
+        }
     }
 
     /// Handles REPL commands (those starting with /)

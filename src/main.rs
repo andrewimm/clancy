@@ -1,4 +1,5 @@
 mod config;
+mod extraction;
 mod project;
 mod repl;
 mod transcript;
