@@ -1,6 +1,7 @@
 mod config;
 mod project;
 mod repl;
+mod transcript;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};

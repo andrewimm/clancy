@@ -7,6 +7,7 @@ use std::process::{Command, Stdio};
 
 use crate::config;
 use crate::project::{Project, NOTE_CATEGORIES};
+use crate::transcript::Transcript;
 
 /// Task summary for conversation continuity
 struct TaskSummary {
@@ -189,8 +190,23 @@ impl Session {
             println!("[Task failed with exit code: {:?}]", status.code());
         }
 
-        // Record task (basic summary for now - will be enhanced in Phase 3)
-        let summary = self.generate_basic_summary(prompt);
+        // Parse the captured output into a structured transcript
+        let transcript = Transcript::parse(&captured_output);
+
+        // Generate summary from transcript (better than just truncating prompt)
+        let summary = if transcript.succeeded() {
+            let auto_summary = transcript.generate_summary();
+            // Prefer transcript summary if meaningful, fall back to prompt
+            if auto_summary.len() > 20 && auto_summary != "(no summary available)" {
+                truncate_string(&auto_summary, 80)
+            } else {
+                self.generate_basic_summary(prompt)
+            }
+        } else {
+            format!("(failed) {}", truncate_string(prompt, 70))
+        };
+
+        // Record task
         self.task_history.push(TaskSummary {
             number: task_num,
             prompt: truncate_string(prompt, 60),
@@ -200,10 +216,20 @@ impl Session {
         // Update project stats
         self.project.record_task()?;
 
-        // Save task log
-        self.save_task_log(task_num, prompt, &captured_output)?;
+        // Save task log with parsed transcript
+        self.save_task_log(task_num, prompt, &captured_output, &transcript)?;
 
-        println!("[Task {} complete]\n", task_num);
+        // Print task completion summary
+        let cost_str = transcript
+            .total_cost()
+            .map(|c| format!(" (${:.4})", c))
+            .unwrap_or_default();
+        let duration_str = transcript
+            .duration_ms()
+            .map(|d| format!(" in {:.1}s", d as f64 / 1000.0))
+            .unwrap_or_default();
+        println!("[Task {} complete{}{}]\n", task_num, duration_str, cost_str);
+
         Ok(())
     }
 
@@ -214,8 +240,14 @@ impl Session {
         truncate_string(prompt, 80)
     }
 
-    /// Saves the task log to disk
-    fn save_task_log(&self, task_num: u32, prompt: &str, output: &str) -> Result<()> {
+    /// Saves the task log to disk with parsed transcript
+    fn save_task_log(
+        &self,
+        task_num: u32,
+        prompt: &str,
+        output: &str,
+        transcript: &Transcript,
+    ) -> Result<()> {
         let tasks_dir = self.project.tasks_path();
         std::fs::create_dir_all(&tasks_dir)?;
 
@@ -228,7 +260,13 @@ impl Session {
             "task_number": task_num,
             "prompt": prompt,
             "timestamp": chrono::Utc::now().to_rfc3339(),
-            "output": output,
+            "success": transcript.succeeded(),
+            "duration_ms": transcript.duration_ms(),
+            "cost_usd": transcript.total_cost(),
+            "tools_used": transcript.tools_used(),
+            "summary": transcript.generate_summary(),
+            "transcript": transcript,
+            "raw_output": output,
         });
 
         let content = serde_json::to_string_pretty(&log)?;

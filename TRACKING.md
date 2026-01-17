@@ -37,11 +37,38 @@ None - Phase 1 complete!
 - Multi-task sessions with history tracking work correctly
 - Context file generation works
 
-## Future Phases
+## Phase 2: Transcript Capture
 
-### Phase 2: Transcript Capture
-- Parse stream-json output into structured task logs
-- Store complete transcripts in project tasks/ directory
+### Completed
+- Created `transcript.rs` module with structured types for stream-json parsing:
+  - `Transcript` struct containing init, messages, and result
+  - `SystemInit` for Claude initialization info (model, version, session)
+  - `Message` enum for text responses, tool usage, and tool results
+  - `TaskResult` for final outcome with success, duration, cost, and token usage
+- Implemented `Transcript::parse()` to parse newline-delimited JSON output
+- Added utility methods: `generate_summary()`, `tools_used()`, `total_cost()`, `duration_ms()`, `succeeded()`
+- Updated `repl.rs` to use transcript parsing:
+  - Parse captured output into structured transcript
+  - Generate summaries from transcript result text instead of truncated prompts
+  - Include duration and cost in task completion messages
+- Enhanced task log format (JSON) to include:
+  - `success`: boolean indicating task success
+  - `duration_ms`: execution time in milliseconds
+  - `cost_usd`: API cost in USD
+  - `tools_used`: array of tool names invoked
+  - `summary`: auto-generated summary from transcript
+  - `transcript`: full parsed transcript structure
+  - `raw_output`: original stream-json output (for debugging)
+- Added 5 unit tests for transcript parsing
+- All 11 tests passing
+
+### In Progress
+None
+
+### Remaining for Phase 2
+None - Phase 2 complete!
+
+## Future Phases
 
 ### Phase 3: Automated Note Extraction
 - Claude API client integration
