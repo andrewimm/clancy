@@ -122,6 +122,7 @@ impl Session {
             .arg(prompt)
             .arg("--output-format")
             .arg("stream-json")
+            .arg("--verbose")
             .current_dir(&self.working_dir)
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit());
