@@ -28,7 +28,14 @@
 None
 
 ### Remaining for Phase 1
-- Manual testing with actual Claude CLI
+None - Phase 1 complete!
+
+### Manual Testing Notes
+- Tested `clancy start`, `clancy list` commands
+- Verified project creation in ~/Library/Application Support/clancy/ (macOS)
+- Ran simple tasks through Claude CLI successfully
+- Multi-task sessions with history tracking work correctly
+- Context file generation works
 
 ## Future Phases
 
