@@ -102,6 +102,45 @@ existing-project> /notes architecture   # review/edit extracted notes
 existing-project> /done
 ```
 
+### Working with a PLAN.md
+
+If you have a PRD or implementation plan with phases/steps, reference it in CLAUDE.md so Claude sees it as you work:
+
+```markdown
+# CLAUDE.md
+
+@PLAN.md
+@.claude/context.md
+```
+
+Then work through it:
+
+```
+my-project> implement Phase 1 from PLAN.md
+[Task 1] Injecting context (~2,100 tokens)...
+
+(Claude implements Phase 1...)
+
+[Task 1 complete in 120.3s ($0.0892)]
+Extracting notes... updated: architecture, decisions, plan
+
+my-project> implement Phase 2 from PLAN.md
+```
+
+As you work, Clancy's notes track your progress:
+- **plan.md** — updates with completed phases and next steps
+- **decisions.md** — captures choices made during implementation
+- **architecture.md** — records patterns discovered
+- **failures.md** — documents what didn't work
+
+You can also seed `plan.md` with the phases upfront:
+
+```
+my-project> /notes plan
+```
+
+Then paste your implementation steps. Clancy will update them as you complete work.
+
 ### Long Session with Context Management
 
 ```
