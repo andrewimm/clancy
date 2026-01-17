@@ -58,7 +58,8 @@ impl Session {
     }
 
     /// Compiles all notes into .claude/context.md
-    fn compile_context(&self) -> Result<()> {
+    /// Returns estimated token count
+    fn compile_context(&self) -> Result<usize> {
         let config = load_config()?;
         let claude_dir = self.working_dir.join(".claude");
         std::fs::create_dir_all(&claude_dir)?;
@@ -192,19 +193,24 @@ impl Session {
             }
         }
 
+        let final_tokens = content.len() / 4;
+
         std::fs::write(&context_path, &content)
             .with_context(|| format!("Failed to write context file: {:?}", context_path))?;
 
-        Ok(())
+        Ok(final_tokens)
     }
 
     /// Runs a task via claude -p
     fn run_task(&mut self, prompt: &str) -> Result<()> {
         // Compile context before task
-        self.compile_context()?;
+        let token_count = self.compile_context()?;
 
         let task_num = self.task_history.len() as u32 + 1;
-        println!("\n[Task {}] Running...\n", task_num);
+        println!(
+            "\n[Task {}] Injecting context (~{} tokens)...\n",
+            task_num, token_count
+        );
 
         // Build the command
         let mut cmd = Command::new("claude");
@@ -614,10 +620,10 @@ pub fn start_session(project_name: &str) -> Result<()> {
         project.metadata.stats.total_sessions,
         project.metadata.stats.total_tasks
     );
-    println!("Injecting context from notes...\n");
 
     let mut session = Session::new(project)?;
-    session.compile_context()?;
+    let token_count = session.compile_context()?;
+    println!("Injected context (~{} tokens)\n", token_count);
 
     // Set up readline
     let mut rl = DefaultEditor::new()?;
