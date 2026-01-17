@@ -5,42 +5,67 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
-use crate::config;
+use crate::config::{self, load_config};
 use crate::extraction::{apply_extraction, extract_notes};
 use crate::project::{Project, NOTE_CATEGORIES};
 use crate::transcript::Transcript;
 
-/// Task summary for conversation continuity
-struct TaskSummary {
+/// Conversation continuity mode
+#[derive(Clone, Copy, PartialEq)]
+enum ConversationMode {
+    /// Fresh context each task (only notes, no history)
+    Fresh,
+    /// Include summaries of prior tasks (default)
+    Summary,
+    /// Include full conversation from prior tasks
+    Full,
+}
+
+/// Task record for conversation continuity
+struct TaskRecord {
     number: u32,
     prompt: String,
     summary: String,
+    /// Full raw output for /continue mode
+    raw_output: String,
 }
 
 /// REPL session state
 struct Session {
     project: Project,
-    task_history: Vec<TaskSummary>,
+    task_history: Vec<TaskRecord>,
     working_dir: PathBuf,
+    /// Current conversation mode
+    conversation_mode: ConversationMode,
 }
 
 impl Session {
     fn new(project: Project) -> Result<Self> {
         let working_dir = std::env::current_dir()?;
+        // Load conversation mode from config
+        let config = load_config()?;
+        let conversation_mode = match config.context.conversation_mode.as_str() {
+            "fresh" => ConversationMode::Fresh,
+            "full" => ConversationMode::Full,
+            _ => ConversationMode::Summary,
+        };
         Ok(Self {
             project,
             task_history: Vec::new(),
             working_dir,
+            conversation_mode,
         })
     }
 
     /// Compiles all notes into .claude/context.md
     fn compile_context(&self) -> Result<()> {
+        let config = load_config()?;
         let claude_dir = self.working_dir.join(".claude");
         std::fs::create_dir_all(&claude_dir)?;
 
         let context_path = claude_dir.join("context.md");
         let mut content = String::new();
+        let max_tokens = config.context.max_context_tokens;
 
         // Header
         content.push_str("<!-- CLANCY CONTEXT — AUTO-GENERATED -->\n");
@@ -50,20 +75,66 @@ impl Session {
             self.task_history.len() + 1
         ));
 
-        // Session context with prior task summaries
+        // Session context based on conversation mode
         if !self.task_history.is_empty() {
-            content.push_str("## Session Context\n\n");
-            content.push_str(&format!(
-                "This is task {} of an ongoing session. Prior tasks:\n",
-                self.task_history.len() + 1
-            ));
-            for task in &self.task_history {
-                content.push_str(&format!(
-                    "{}. {} — {}\n",
-                    task.number, task.prompt, task.summary
-                ));
+            match self.conversation_mode {
+                ConversationMode::Fresh => {
+                    // No session history included
+                }
+                ConversationMode::Summary => {
+                    content.push_str("## Session Context\n\n");
+                    content.push_str(&format!(
+                        "This is task {} of an ongoing session. Prior tasks:\n",
+                        self.task_history.len() + 1
+                    ));
+                    for task in &self.task_history {
+                        content.push_str(&format!(
+                            "{}. {} — {}\n",
+                            task.number, task.prompt, task.summary
+                        ));
+                    }
+                    content.push_str("\n");
+                }
+                ConversationMode::Full => {
+                    content.push_str("## Full Conversation History\n\n");
+                    content.push_str(&format!(
+                        "This is task {} of an ongoing session. Full prior conversation:\n\n",
+                        self.task_history.len() + 1
+                    ));
+                    for task in &self.task_history {
+                        content.push_str(&format!("### Task {}: {}\n\n", task.number, task.prompt));
+                        // Include the full transcript, parsed for readability
+                        let transcript = Transcript::parse(&task.raw_output);
+                        for msg in &transcript.messages {
+                            match msg {
+                                crate::transcript::Message::Text { text } => {
+                                    content.push_str(text);
+                                    content.push_str("\n\n");
+                                }
+                                crate::transcript::Message::ToolUse { tool_name, .. } => {
+                                    content.push_str(&format!("[Used tool: {}]\n\n", tool_name));
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
             }
-            content.push_str("\n");
+        }
+
+        // Include parent project notes if configured and parent exists
+        if config.context.include_parent_notes {
+            if let Some(ref parent_name) = self.project.metadata.parent {
+                if let Ok(parent) = Project::open(parent_name) {
+                    let parent_arch = parent.read_notes("architecture")?;
+                    if !parent_arch.trim().is_empty() {
+                        content
+                            .push_str(&format!("## Inherited Context (from {})\n\n", parent_name));
+                        content.push_str(&parent_arch);
+                        content.push_str("\n\n");
+                    }
+                }
+            }
         }
 
         // Architecture notes
@@ -103,6 +174,23 @@ impl Session {
         content.push_str(
             "When you complete work or encounter a problem, state it clearly for continuity.\n",
         );
+
+        // Apply token budget (rough estimate: 4 chars per token)
+        let estimated_tokens = content.len() / 4;
+        if estimated_tokens > max_tokens {
+            // Truncate content, keeping header and footer
+            let max_chars = max_tokens * 4;
+            if content.len() > max_chars {
+                let truncated = &content[..max_chars];
+                // Find last complete section
+                if let Some(pos) = truncated.rfind("\n## ") {
+                    content = format!(
+                        "{}\n\n[Context truncated due to token limit]\n",
+                        &content[..pos]
+                    );
+                }
+            }
+        }
 
         std::fs::write(&context_path, &content)
             .with_context(|| format!("Failed to write context file: {:?}", context_path))?;
@@ -207,11 +295,12 @@ impl Session {
             format!("(failed) {}", truncate_string(prompt, 70))
         };
 
-        // Record task
-        self.task_history.push(TaskSummary {
+        // Record task with full output for /continue mode
+        self.task_history.push(TaskRecord {
             number: task_num,
             prompt: truncate_string(prompt, 60),
             summary,
+            raw_output: captured_output.clone(),
         });
 
         // Update project stats
@@ -317,6 +406,42 @@ impl Session {
         }
     }
 
+    /// Compacts the session history into a single summary
+    fn run_compact(&mut self) {
+        if self.task_history.is_empty() {
+            println!("No tasks to compact.");
+            return;
+        }
+
+        print!("Compacting {} tasks...", self.task_history.len());
+        std::io::stdout().flush().ok();
+
+        // Create a summary of all tasks
+        let mut summary_parts: Vec<String> = Vec::new();
+        for task in &self.task_history {
+            summary_parts.push(format!(
+                "- Task {}: {} → {}",
+                task.number, task.prompt, task.summary
+            ));
+        }
+        let combined_summary = summary_parts.join("\n");
+
+        // Clear history but keep a single summary record
+        let task_count = self.task_history.len();
+        self.task_history.clear();
+        self.task_history.push(TaskRecord {
+            number: 0, // Special marker for compacted history
+            prompt: format!("(compacted {} tasks)", task_count),
+            summary: combined_summary,
+            raw_output: String::new(),
+        });
+
+        // Switch to summary mode
+        self.conversation_mode = ConversationMode::Summary;
+
+        println!(" done. Session history compacted.");
+    }
+
     /// Handles REPL commands (those starting with /)
     fn handle_command(&mut self, cmd: &str) -> Result<bool> {
         let parts: Vec<&str> = cmd.split_whitespace().collect();
@@ -339,6 +464,25 @@ impl Session {
             }
             "/history" => {
                 self.show_history();
+            }
+            "/continue" => {
+                self.conversation_mode = ConversationMode::Full;
+                println!(
+                    "Switched to full conversation mode. Next task will include complete prior context."
+                );
+            }
+            "/compact" => {
+                self.run_compact();
+            }
+            "/fresh" => {
+                self.conversation_mode = ConversationMode::Fresh;
+                println!("Switched to fresh mode. Next task will only include notes, no session history.");
+            }
+            "/summary" => {
+                self.conversation_mode = ConversationMode::Summary;
+                println!(
+                    "Switched to summary mode (default). Next task will include task summaries."
+                );
             }
             "/help" => {
                 self.show_help();
@@ -428,6 +572,11 @@ impl Session {
     }
 
     fn show_help(&self) {
+        let mode_str = match self.conversation_mode {
+            ConversationMode::Fresh => "fresh",
+            ConversationMode::Summary => "summary",
+            ConversationMode::Full => "full",
+        };
         println!(
             r#"
 ## Clancy REPL Commands
@@ -436,9 +585,20 @@ impl Session {
   /status              Show current notes summary
   /notes [category]    Edit notes (architecture|decisions|failures|plan)
   /history             Show task history this session
+
+## Conversation Modes (current: {})
+
+  /continue            Switch to full mode (include complete prior context)
+  /compact             Summarize history and start fresh
+  /fresh               Switch to fresh mode (only notes, no history)
+  /summary             Switch to summary mode (default)
+
+## Session
+
   /done or /quit       Exit the session
   /help                Show this help
-"#
+"#,
+            mode_str
         );
     }
 }

@@ -105,10 +105,42 @@ None
 ### Remaining for Phase 3
 None - Phase 3 complete!
 
-## Future Phases
+## Phase 4: Polish
 
-### Phase 4: Polish
-- Conversation continuity modes (/continue, /compact)
-- Project linking for branch stacks
-- Token budget management
-- Better error handling
+### Completed
+- Conversation continuity modes:
+  - `/continue` - Switch to full mode, includes complete prior conversation in context
+  - `/compact` - Summarize all tasks and reset history for fresh start
+  - `/fresh` - Only include notes, no session history
+  - `/summary` - Default mode, includes task summaries
+  - Mode is configurable via `conversation_mode` in config.toml
+- Project linking for branch stacks:
+  - `clancy link <child> <parent>` - Link projects for note inheritance
+  - `clancy unlink <project>` - Remove parent link
+  - Includes circular reference detection
+  - Parent architecture notes automatically included in child context
+- Token budget management:
+  - Configurable `max_context_tokens` in config.toml (default: 12000)
+  - Automatic context truncation when budget exceeded
+  - Preserves section boundaries when truncating
+- Improved error handling:
+  - 60-second timeout for API requests
+  - Helpful hints for common API errors (401, 429, 5xx)
+  - Better network error messages
+  - Graceful handling of empty API responses
+- Updated `/help` to show current conversation mode
+- All 14 tests passing
+
+### In Progress
+None
+
+### Remaining for Phase 4
+None - Phase 4 complete!
+
+## Implementation Complete
+
+All four phases have been implemented:
+- **Phase 1**: Basic REPL + Context Injection
+- **Phase 2**: Transcript Capture
+- **Phase 3**: Automated Note Extraction
+- **Phase 4**: Polish (conversation continuity, project linking, token budget, error handling)

@@ -355,6 +355,68 @@ pub fn archive_project(project_name: &str) -> Result<()> {
     Ok(())
 }
 
+/// Links a child project to a parent for note inheritance
+pub fn link_projects(child_name: &str, parent_name: &str) -> Result<()> {
+    // Verify parent exists
+    let _parent = Project::open(parent_name)
+        .with_context(|| format!("Parent project '{}' not found", parent_name))?;
+
+    // Update child's parent reference
+    let mut child = Project::open(child_name)
+        .with_context(|| format!("Child project '{}' not found", child_name))?;
+
+    // Check for circular references
+    if child_name == parent_name {
+        bail!("Cannot link a project to itself");
+    }
+
+    // Check if parent has this child as an ancestor (would create cycle)
+    let mut current = Some(parent_name.to_string());
+    while let Some(ref name) = current {
+        if name == child_name {
+            bail!(
+                "Cannot link: would create circular reference ({} -> ... -> {})",
+                child_name,
+                parent_name
+            );
+        }
+        if let Ok(p) = Project::open(name) {
+            current = p.metadata.parent;
+        } else {
+            break;
+        }
+    }
+
+    child.metadata.parent = Some(parent_name.to_string());
+    child.save_metadata()?;
+
+    println!(
+        "Linked '{}' -> '{}'. Child will inherit parent's architecture notes.",
+        child_name, parent_name
+    );
+    Ok(())
+}
+
+/// Unlinks a project from its parent
+pub fn unlink_project(project_name: &str) -> Result<()> {
+    let mut project = Project::open(project_name)?;
+
+    if project.metadata.parent.is_none() {
+        println!("Project '{}' has no parent link.", project_name);
+        return Ok(());
+    }
+
+    let parent_name = project.metadata.parent.take();
+    project.save_metadata()?;
+
+    println!(
+        "Unlinked '{}' from '{}'.",
+        project_name,
+        parent_name.unwrap_or_default()
+    );
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

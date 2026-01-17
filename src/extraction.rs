@@ -278,7 +278,10 @@ fn format_transcript_for_extraction(transcript: &Transcript, task_prompt: &str) 
 
 /// Calls the Claude API with the extraction prompt
 async fn call_claude_api(api_key: &str, config: &Config, prompt: &str) -> Result<String> {
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(60))
+        .build()
+        .context("Failed to create HTTP client")?;
 
     let request = ApiRequest {
         model: config.claude.model.clone(),
@@ -297,12 +300,21 @@ async fn call_claude_api(api_key: &str, config: &Config, prompt: &str) -> Result
         .json(&request)
         .send()
         .await
-        .context("Failed to send request to Claude API")?;
+        .context("Failed to connect to Claude API (check network connection)")?;
 
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        bail!("Claude API error ({}): {}", status, body);
+
+        // Provide helpful error messages for common issues
+        let hint = match status.as_u16() {
+            401 => " (check your API key)",
+            429 => " (rate limited, try again later)",
+            500..=599 => " (API server error, try again later)",
+            _ => "",
+        };
+
+        bail!("Claude API error ({}){}: {}", status, hint, body);
     }
 
     let api_response: ApiResponse = response
@@ -318,6 +330,10 @@ async fn call_claude_api(api_key: &str, config: &Config, prompt: &str) -> Result
         .filter_map(|c| c.text.as_deref())
         .collect::<Vec<_>>()
         .join("");
+
+    if text.is_empty() {
+        bail!("Claude API returned empty response");
+    }
 
     Ok(text)
 }

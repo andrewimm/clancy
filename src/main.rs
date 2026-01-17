@@ -41,6 +41,18 @@ enum Commands {
         /// Project name
         project_name: String,
     },
+    /// Link a child project to a parent for note inheritance
+    Link {
+        /// Child project name
+        child: String,
+        /// Parent project name
+        parent: String,
+    },
+    /// Unlink a child project from its parent
+    Unlink {
+        /// Project name to unlink
+        project_name: String,
+    },
 }
 
 fn main() -> Result<()> {
@@ -61,6 +73,12 @@ fn main() -> Result<()> {
         }
         Commands::Archive { project_name } => {
             project::archive_project(&project_name)?;
+        }
+        Commands::Link { child, parent } => {
+            project::link_projects(&child, &parent)?;
+        }
+        Commands::Unlink { project_name } => {
+            project::unlink_project(&project_name)?;
         }
     }
 
