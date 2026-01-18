@@ -172,7 +172,7 @@ All four phases have been implemented:
 - Added configurable `base_url` for Claude API endpoint:
   - Allows using API proxies like Vercel AI Gateway
   - Default: `https://api.anthropic.com`
-  - Set in config.toml under `[claude]` section: `base_url = "https://gateway.ai.vercel.app/v1/anthropic"`
+  - Set in config.toml under `[claude]` section: `base_url = "https://ai-gateway.vercel.sh"`
 - Added `.env` file support for loading environment variables:
   - Uses `dotenvy` crate to load `.env` at startup
   - Silently continues if no `.env` file exists
