@@ -243,7 +243,7 @@ fn format_transcript_for_extraction(transcript: &Transcript, task_prompt: &str) 
                 if input_str.len() < 500 {
                     output.push_str(&format!("Input: {}\n", input_str));
                 }
-                output.push_str("\n");
+                output.push('\n');
             }
             crate::transcript::Message::ToolResult {
                 output: result,

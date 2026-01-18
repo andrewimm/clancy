@@ -245,7 +245,7 @@ pub fn list_projects() -> Result<()> {
     }
 
     // Sort by name
-    projects.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
+    projects.sort_by_key(|a| a.file_name());
 
     println!("Projects:\n");
     for entry in projects {

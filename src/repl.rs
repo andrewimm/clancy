@@ -94,7 +94,7 @@ impl Session {
                             task.number, task.prompt, task.summary
                         ));
                     }
-                    content.push_str("\n");
+                    content.push('\n');
                 }
                 ConversationMode::Full => {
                     content.push_str("## Full Conversation History\n\n");
@@ -206,7 +206,7 @@ impl Session {
         // Compile context before task
         let token_count = self.compile_context()?;
 
-        let task_num = self.task_history.len() as u32 + 1;
+        let task_num = self.project.next_task_number()?;
         println!(
             "\n[Task {}] Injecting context (~{} tokens)...\n",
             task_num, token_count
@@ -522,7 +522,7 @@ impl Session {
     /// Handles REPL commands (those starting with /)
     fn handle_command(&mut self, cmd: &str) -> Result<bool> {
         let parts: Vec<&str> = cmd.split_whitespace().collect();
-        let command = parts.first().map(|s| *s).unwrap_or("");
+        let command = parts.first().copied().unwrap_or("");
 
         match command {
             "/done" | "/quit" | "/q" => {

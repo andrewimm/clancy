@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 /// Global Clancy configuration
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Config {
     #[serde(default)]
     pub claude: ClaudeConfig,
@@ -90,17 +90,6 @@ fn default_prompt_style() -> String {
     "project".to_string()
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            claude: ClaudeConfig::default(),
-            extraction: ExtractionConfig::default(),
-            context: ContextConfig::default(),
-            repl: ReplConfig::default(),
-        }
-    }
-}
-
 impl Default for ClaudeConfig {
     fn default() -> Self {
         Self {
@@ -182,16 +171,6 @@ pub fn load_config() -> Result<Config> {
     } else {
         Ok(Config::default())
     }
-}
-
-/// Saves the config to disk
-pub fn save_config(config: &Config) -> Result<()> {
-    ensure_config_dir()?;
-    let config_path = config_file()?;
-    let content = toml::to_string_pretty(config).context("Failed to serialize config")?;
-    std::fs::write(&config_path, content)
-        .with_context(|| format!("Failed to write config file: {:?}", config_path))?;
-    Ok(())
 }
 
 #[cfg(test)]
