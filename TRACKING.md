@@ -144,3 +144,19 @@ All four phases have been implemented:
 - **Phase 2**: Transcript Capture
 - **Phase 3**: Automated Note Extraction
 - **Phase 4**: Polish (conversation continuity, project linking, token budget, error handling)
+
+## Maintenance
+
+### Bug Fixes
+- Fixed task numbering bug: task numbers now persist across sessions by scanning
+  existing task files instead of using in-memory session count. Previously,
+  starting a new session would overwrite task logs from prior sessions.
+
+### Code Quality
+- Addressed all clippy lint warnings:
+  - Use `#[derive(Default)]` for `Config` instead of manual impl
+  - Use `push('\n')` instead of `push_str("\n")` for single chars
+  - Use `sort_by_key` instead of `sort_by` for simpler comparisons
+  - Use `.copied()` instead of `.map(|s| *s)`
+- Removed unused `save_config` function
+- All 16 tests passing
