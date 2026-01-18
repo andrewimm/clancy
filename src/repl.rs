@@ -448,6 +448,77 @@ impl Session {
         println!(" done. Session history compacted.");
     }
 
+    /// Runs phases from a plan file automatically
+    fn run_auto(&mut self, file: Option<&str>) -> Result<()> {
+        let file_path = file.unwrap_or("PLAN.md");
+        let path = self.working_dir.join(file_path);
+
+        if !path.exists() {
+            anyhow::bail!(
+                "Plan file not found: {}\nUsage: /auto [file.md]  (defaults to PLAN.md)",
+                path.display()
+            );
+        }
+
+        let content = std::fs::read_to_string(&path)
+            .with_context(|| format!("Failed to read plan file: {}", path.display()))?;
+
+        let phases = parse_plan_phases(&content);
+
+        if phases.is_empty() {
+            anyhow::bail!(
+                "No phases found in {}.\nExpected format:\n\n## Phase 1: Title\nDescription of what to do.\n\n## Phase 2: Title\n...",
+                file_path
+            );
+        }
+
+        println!("\nFound {} phases in {}:\n", phases.len(), file_path);
+        for (i, phase) in phases.iter().enumerate() {
+            println!("  {}. {}", i + 1, phase.title);
+        }
+        println!("\nPress Enter to start, or Ctrl+C to cancel...");
+
+        // Wait for user confirmation
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+
+        for (i, phase) in phases.iter().enumerate() {
+            println!("\n{}", "=".repeat(60));
+            println!("Phase {}/{}: {}", i + 1, phases.len(), phase.title);
+            println!("{}\n", "=".repeat(60));
+
+            // Build the task prompt
+            let prompt = format!("{}\n\n{}", phase.title, phase.description);
+
+            // Run the task
+            if let Err(e) = self.run_task(&prompt) {
+                println!("\nPhase {} failed: {}", i + 1, e);
+                println!("Stopping auto mode. Use /history to see completed phases.");
+                return Ok(());
+            }
+
+            // If there are more phases, ask to continue
+            if i < phases.len() - 1 {
+                println!(
+                    "\nPhase {} complete. Press Enter for next phase, or 'q' to stop...",
+                    i + 1
+                );
+                let mut input = String::new();
+                std::io::stdin().read_line(&mut input)?;
+                if input.trim().eq_ignore_ascii_case("q") {
+                    println!("Stopped. {} of {} phases complete.", i + 1, phases.len());
+                    return Ok(());
+                }
+            }
+        }
+
+        println!("\n{}", "=".repeat(60));
+        println!("All {} phases complete!", phases.len());
+        println!("{}\n", "=".repeat(60));
+
+        Ok(())
+    }
+
     /// Handles REPL commands (those starting with /)
     fn handle_command(&mut self, cmd: &str) -> Result<bool> {
         let parts: Vec<&str> = cmd.split_whitespace().collect();
@@ -489,6 +560,12 @@ impl Session {
                 println!(
                     "Switched to summary mode (default). Next task will include task summaries."
                 );
+            }
+            "/auto" => {
+                let file = parts.get(1).copied();
+                if let Err(e) = self.run_auto(file) {
+                    println!("Auto error: {}", e);
+                }
             }
             "/help" => {
                 self.show_help();
@@ -591,6 +668,7 @@ impl Session {
   /status              Show current notes summary
   /notes [category]    Edit notes (architecture|decisions|failures|plan)
   /history             Show task history this session
+  /auto [file]         Run phases from PLAN.md (or specified file)
 
 ## Conversation Modes (current: {})
 
@@ -687,6 +765,78 @@ fn truncate_string(s: &str, max_len: usize) -> String {
     }
 }
 
+/// A phase parsed from a plan file
+struct Phase {
+    title: String,
+    description: String,
+}
+
+/// Parses phases from a markdown plan file
+/// Looks for ## headers with "Phase" or numbered sections
+fn parse_plan_phases(content: &str) -> Vec<Phase> {
+    let mut phases = Vec::new();
+    let mut current_title: Option<String> = None;
+    let mut current_desc = String::new();
+
+    for line in content.lines() {
+        // Check for phase header: ## Phase N: Title or ## N. Title or just ## Title
+        if line.starts_with("## ") {
+            // Save previous phase if exists
+            if let Some(title) = current_title.take() {
+                phases.push(Phase {
+                    title,
+                    description: current_desc.trim().to_string(),
+                });
+                current_desc.clear();
+            }
+
+            // Parse new phase title
+            let header = line.trim_start_matches("## ").trim();
+            // Skip non-phase headers like "## Configuration" or "## Notes"
+            let is_phase = header.to_lowercase().contains("phase")
+                || header
+                    .chars()
+                    .next()
+                    .map(|c| c.is_ascii_digit())
+                    .unwrap_or(false);
+
+            if is_phase {
+                // Clean up title: remove "Phase N:" prefix if present
+                let title = header
+                    .trim_start_matches(|c: char| {
+                        c.is_ascii_digit() || c == '.' || c == ':' || c == ' '
+                    })
+                    .trim_start_matches("Phase")
+                    .trim_start_matches(|c: char| {
+                        c.is_ascii_digit() || c == '.' || c == ':' || c == ' '
+                    })
+                    .to_string();
+                current_title = Some(if title.is_empty() {
+                    header.to_string()
+                } else {
+                    title
+                });
+            }
+        } else if current_title.is_some() && !line.starts_with('#') {
+            // Accumulate description lines
+            if !line.trim().is_empty() || !current_desc.is_empty() {
+                current_desc.push_str(line);
+                current_desc.push('\n');
+            }
+        }
+    }
+
+    // Don't forget the last phase
+    if let Some(title) = current_title {
+        phases.push(Phase {
+            title,
+            description: current_desc.trim().to_string(),
+        });
+    }
+
+    phases
+}
+
 /// Creates a URL-safe slug from text
 fn create_slug(text: &str) -> String {
     text.chars()
@@ -717,5 +867,54 @@ mod tests {
     fn test_create_slug() {
         assert_eq!(create_slug("Fix the auth bug"), "fix-the-auth-bug");
         assert_eq!(create_slug("Test!@#$%"), "test");
+    }
+
+    #[test]
+    fn test_parse_plan_phases() {
+        let content = r#"
+# My Plan
+
+Some intro text.
+
+## Phase 1: Setup
+Set up the project structure.
+Create initial files.
+
+## Phase 2: Core Implementation
+Implement the main logic.
+
+## Notes
+This is not a phase.
+
+## Phase 3: Polish
+Add finishing touches.
+"#;
+
+        let phases = parse_plan_phases(content);
+        assert_eq!(phases.len(), 3);
+
+        assert_eq!(phases[0].title, "Setup");
+        assert!(phases[0].description.contains("Set up the project"));
+
+        assert_eq!(phases[1].title, "Core Implementation");
+        assert!(phases[1].description.contains("main logic"));
+
+        assert_eq!(phases[2].title, "Polish");
+    }
+
+    #[test]
+    fn test_parse_plan_numbered_phases() {
+        let content = r#"
+## 1. First Step
+Do the first thing.
+
+## 2. Second Step
+Do the second thing.
+"#;
+
+        let phases = parse_plan_phases(content);
+        assert_eq!(phases.len(), 2);
+        assert_eq!(phases[0].title, "First Step");
+        assert_eq!(phases[1].title, "Second Step");
     }
 }

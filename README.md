@@ -104,7 +104,52 @@ existing-project> /done
 
 ### Working with a PLAN.md
 
-If you have a PRD or implementation plan with phases/steps, reference it in CLAUDE.md so Claude sees it as you work:
+If you have a PRD or implementation plan, use `/auto` to run through all phases automatically:
+
+```
+my-project> /auto PLAN.md
+
+Found 4 phases in PLAN.md:
+
+  1. Setup
+  2. Core Implementation
+  3. Testing
+  4. Polish
+
+Press Enter to start, or Ctrl+C to cancel...
+
+============================================================
+Phase 1/4: Setup
+============================================================
+
+[Task 1] Injecting context (~450 tokens)...
+
+(Claude implements Phase 1...)
+
+[Task 1 complete in 45.2s ($0.0234)]
+Extracting notes... updated: architecture, plan
+
+Phase 1 complete. Press Enter for next phase, or 'q' to stop...
+```
+
+**PLAN.md format:**
+
+```markdown
+# My Implementation Plan
+
+## Phase 1: Setup
+Set up the project structure with Cargo.toml and basic CLI.
+
+## Phase 2: Core Implementation
+Implement the main business logic.
+
+## Phase 3: Testing
+Add unit and integration tests.
+```
+
+Clancy parses `## Phase N: Title` or `## N. Title` headers and uses the following paragraph as the task prompt.
+
+You can also reference the plan in CLAUDE.md for manual work:
 
 ```markdown
 # CLAUDE.md
@@ -113,33 +158,11 @@ If you have a PRD or implementation plan with phases/steps, reference it in CLAU
 @.claude/context.md
 ```
 
-Then work through it:
+Then work through phases manually:
 
 ```
 my-project> implement Phase 1 from PLAN.md
-[Task 1] Injecting context (~2,100 tokens)...
-
-(Claude implements Phase 1...)
-
-[Task 1 complete in 120.3s ($0.0892)]
-Extracting notes... updated: architecture, decisions, plan
-
-my-project> implement Phase 2 from PLAN.md
 ```
-
-As you work, Clancy's notes track your progress:
-- **plan.md** — updates with completed phases and next steps
-- **decisions.md** — captures choices made during implementation
-- **architecture.md** — records patterns discovered
-- **failures.md** — documents what didn't work
-
-You can also seed `plan.md` with the phases upfront:
-
-```
-my-project> /notes plan
-```
-
-Then paste your implementation steps. Clancy will update them as you complete work.
 
 ### Long Session with Context Management
 
@@ -187,6 +210,7 @@ clancy unlink <project>          # Remove parent link
 | `/status` | Show current plan and recent decisions |
 | `/notes [category]` | Edit notes in your editor |
 | `/history` | Show tasks this session |
+| `/auto [file]` | Run all phases from PLAN.md (or specified file) |
 | `/continue` | Full conversation mode (complete prior context) |
 | `/compact` | Summarize history, start fresh |
 | `/fresh` | Only notes, no session history |
