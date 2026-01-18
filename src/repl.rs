@@ -688,6 +688,23 @@ impl Session {
     }
 }
 
+/// Checks if .gitignore content already contains a .claude entry
+fn gitignore_has_claude_entry(content: &str) -> bool {
+    content.lines().any(|line| {
+        let line = line.trim();
+        line == ".claude/" || line == ".claude" || line == "/.claude/" || line == "/.claude"
+    })
+}
+
+/// Formats the .claude/ entry to append to gitignore, handling trailing newline
+fn format_gitignore_append(existing_content: &str) -> String {
+    if existing_content.ends_with('\n') || existing_content.is_empty() {
+        ".claude/\n".to_string()
+    } else {
+        "\n.claude/\n".to_string()
+    }
+}
+
 /// Checks if .gitignore exists and offers to add .claude/ if not present
 fn check_gitignore(working_dir: &std::path::Path) -> Result<()> {
     let gitignore_path = working_dir.join(".gitignore");
@@ -700,13 +717,7 @@ fn check_gitignore(working_dir: &std::path::Path) -> Result<()> {
     let content = std::fs::read_to_string(&gitignore_path)
         .with_context(|| format!("Failed to read .gitignore: {:?}", gitignore_path))?;
 
-    // Check if .claude/ or .claude is already ignored
-    let has_claude_entry = content.lines().any(|line| {
-        let line = line.trim();
-        line == ".claude/" || line == ".claude" || line == "/.claude/" || line == "/.claude"
-    });
-
-    if has_claude_entry {
+    if gitignore_has_claude_entry(&content) {
         return Ok(());
     }
 
@@ -722,12 +733,7 @@ fn check_gitignore(working_dir: &std::path::Path) -> Result<()> {
     if input.is_empty() || input == "y" || input == "yes" {
         // Append .claude/ to .gitignore
         let mut file = OpenOptions::new().append(true).open(&gitignore_path)?;
-
-        // Add newline if file doesn't end with one
-        if !content.ends_with('\n') {
-            writeln!(file)?;
-        }
-        writeln!(file, ".claude/")?;
+        write!(file, "{}", format_gitignore_append(&content))?;
         println!("Added '.claude/' to .gitignore\n");
     } else {
         println!();
@@ -969,5 +975,84 @@ Do the second thing.
         assert_eq!(phases.len(), 2);
         assert_eq!(phases[0].title, "First Step");
         assert_eq!(phases[1].title, "Second Step");
+    }
+
+    #[test]
+    fn test_gitignore_has_claude_entry_with_trailing_slash() {
+        assert!(gitignore_has_claude_entry(".claude/"));
+        assert!(gitignore_has_claude_entry("node_modules/\n.claude/\n*.log"));
+        assert!(gitignore_has_claude_entry("*.log\n.claude/"));
+    }
+
+    #[test]
+    fn test_gitignore_has_claude_entry_without_trailing_slash() {
+        assert!(gitignore_has_claude_entry(".claude"));
+        assert!(gitignore_has_claude_entry("node_modules/\n.claude\n*.log"));
+    }
+
+    #[test]
+    fn test_gitignore_has_claude_entry_with_leading_slash() {
+        assert!(gitignore_has_claude_entry("/.claude/"));
+        assert!(gitignore_has_claude_entry("/.claude"));
+    }
+
+    #[test]
+    fn test_gitignore_has_claude_entry_with_whitespace() {
+        assert!(gitignore_has_claude_entry("  .claude/  "));
+        assert!(gitignore_has_claude_entry("\t.claude\t"));
+    }
+
+    #[test]
+    fn test_gitignore_has_claude_entry_negative() {
+        assert!(!gitignore_has_claude_entry(""));
+        assert!(!gitignore_has_claude_entry("node_modules/\n*.log"));
+        assert!(!gitignore_has_claude_entry(".claudecode"));
+        assert!(!gitignore_has_claude_entry(".claude-something"));
+        assert!(!gitignore_has_claude_entry("my.claude/"));
+        assert!(!gitignore_has_claude_entry("# .claude/"));
+    }
+
+    #[test]
+    fn test_format_gitignore_append_empty() {
+        assert_eq!(format_gitignore_append(""), ".claude/\n");
+    }
+
+    #[test]
+    fn test_format_gitignore_append_with_trailing_newline() {
+        assert_eq!(format_gitignore_append("node_modules/\n"), ".claude/\n");
+        assert_eq!(
+            format_gitignore_append("node_modules/\n*.log\n"),
+            ".claude/\n"
+        );
+    }
+
+    #[test]
+    fn test_format_gitignore_append_without_trailing_newline() {
+        assert_eq!(format_gitignore_append("node_modules/"), "\n.claude/\n");
+        assert_eq!(
+            format_gitignore_append("node_modules/\n*.log"),
+            "\n.claude/\n"
+        );
+    }
+
+    #[test]
+    fn test_check_gitignore_no_file() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        // No .gitignore file exists
+        assert!(check_gitignore(temp_dir.path()).is_ok());
+    }
+
+    #[test]
+    fn test_check_gitignore_already_has_entry() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let gitignore_path = temp_dir.path().join(".gitignore");
+        std::fs::write(&gitignore_path, "node_modules/\n.claude/\n").unwrap();
+
+        // Should return Ok without prompting (entry already exists)
+        assert!(check_gitignore(temp_dir.path()).is_ok());
+
+        // File should be unchanged
+        let content = std::fs::read_to_string(&gitignore_path).unwrap();
+        assert_eq!(content, "node_modules/\n.claude/\n");
     }
 }

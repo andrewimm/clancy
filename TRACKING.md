@@ -159,7 +159,7 @@ All four phases have been implemented:
   - Use `sort_by_key` instead of `sort_by` for simpler comparisons
   - Use `.copied()` instead of `.map(|s| *s)`
 - Removed unused `save_config` function
-- All 16 tests passing
+- All 26 tests passing
 
 ### User Experience
 - Added `.gitignore` check on session start:
