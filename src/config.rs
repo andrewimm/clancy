@@ -23,6 +23,9 @@ pub struct ClaudeConfig {
     /// Model for note extraction
     #[serde(default = "default_model")]
     pub model: String,
+    /// Base URL for Claude API (allows proxies like Vercel AI Gateway)
+    #[serde(default = "default_base_url")]
+    pub base_url: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -66,6 +69,10 @@ fn default_model() -> String {
     "claude-sonnet-4-20250514".to_string()
 }
 
+fn default_base_url() -> String {
+    "https://api.anthropic.com".to_string()
+}
+
 fn default_max_transcript_tokens() -> usize {
     100000
 }
@@ -95,6 +102,7 @@ impl Default for ClaudeConfig {
         Self {
             api_key_env: default_api_key_env(),
             model: default_model(),
+            base_url: default_base_url(),
         }
     }
 }

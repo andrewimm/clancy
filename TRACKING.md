@@ -167,3 +167,9 @@ All four phases have been implemented:
   - If `.claude/` is not already ignored, prompts user to add it
   - Defaults to "yes" (user can press Enter to accept)
   - Handles edge cases: missing file, already present entry, file not ending with newline
+
+### Configuration
+- Added configurable `base_url` for Claude API endpoint:
+  - Allows using API proxies like Vercel AI Gateway
+  - Default: `https://api.anthropic.com`
+  - Set in config.toml under `[claude]` section: `base_url = "https://gateway.ai.vercel.app/v1/anthropic"`

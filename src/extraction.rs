@@ -292,8 +292,9 @@ async fn call_claude_api(api_key: &str, config: &Config, prompt: &str) -> Result
         }],
     };
 
+    let url = format!("{}/v1/messages", config.claude.base_url);
     let response = client
-        .post("https://api.anthropic.com/v1/messages")
+        .post(&url)
         .header("x-api-key", api_key)
         .header("anthropic-version", "2023-06-01")
         .header("content-type", "application/json")
