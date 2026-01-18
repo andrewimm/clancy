@@ -173,3 +173,7 @@ All four phases have been implemented:
   - Allows using API proxies like Vercel AI Gateway
   - Default: `https://api.anthropic.com`
   - Set in config.toml under `[claude]` section: `base_url = "https://gateway.ai.vercel.app/v1/anthropic"`
+- Added `.env` file support for loading environment variables:
+  - Uses `dotenvy` crate to load `.env` at startup
+  - Silently continues if no `.env` file exists
+  - Useful for setting `ANTHROPIC_API_KEY` without exporting in shell

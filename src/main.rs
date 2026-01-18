@@ -56,6 +56,9 @@ enum Commands {
 }
 
 fn main() -> Result<()> {
+    // Load .env file if present (won't fail if missing)
+    dotenvy::dotenv().ok();
+
     let cli = Cli::parse();
 
     match cli.command {
