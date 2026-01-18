@@ -236,6 +236,24 @@ include_parent_notes = true            # inherit from linked projects
 editor = "vim"                         # for /notes command
 ```
 
+### Using Vercel AI Gateway
+
+To route API calls through [Vercel AI Gateway](https://vercel.com/docs/ai-gateway), set the `base_url` in your config:
+
+```toml
+[claude]
+api_key_env = "ANTHROPIC_API_KEY"      # or your Vercel-provided key
+base_url = "https://ai-gateway.vercel.sh"
+```
+
+You can also store your API key in a `.env` file in your project directory:
+
+```bash
+ANTHROPIC_API_KEY=your-api-key-here
+```
+
+Clancy loads `.env` automatically at startup.
+
 ## How It Works
 
 ```
