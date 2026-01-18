@@ -160,3 +160,10 @@ All four phases have been implemented:
   - Use `.copied()` instead of `.map(|s| *s)`
 - Removed unused `save_config` function
 - All 16 tests passing
+
+### User Experience
+- Added `.gitignore` check on session start:
+  - On `clancy start`, checks if `.gitignore` exists in working directory
+  - If `.claude/` is not already ignored, prompts user to add it
+  - Defaults to "yes" (user can press Enter to accept)
+  - Handles edge cases: missing file, already present entry, file not ending with newline

@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
+use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -687,6 +688,54 @@ impl Session {
     }
 }
 
+/// Checks if .gitignore exists and offers to add .claude/ if not present
+fn check_gitignore(working_dir: &std::path::Path) -> Result<()> {
+    let gitignore_path = working_dir.join(".gitignore");
+
+    if !gitignore_path.exists() {
+        // No .gitignore file, nothing to do
+        return Ok(());
+    }
+
+    let content = std::fs::read_to_string(&gitignore_path)
+        .with_context(|| format!("Failed to read .gitignore: {:?}", gitignore_path))?;
+
+    // Check if .claude/ or .claude is already ignored
+    let has_claude_entry = content.lines().any(|line| {
+        let line = line.trim();
+        line == ".claude/" || line == ".claude" || line == "/.claude/" || line == "/.claude"
+    });
+
+    if has_claude_entry {
+        return Ok(());
+    }
+
+    // Ask user if they want to add the entry
+    println!("The .claude/ directory (used for context injection) is not in .gitignore.");
+    print!("Add '.claude/' to .gitignore? [Y/n] ");
+    std::io::stdout().flush()?;
+
+    let mut input = String::new();
+    std::io::stdin().read_line(&mut input)?;
+    let input = input.trim().to_lowercase();
+
+    if input.is_empty() || input == "y" || input == "yes" {
+        // Append .claude/ to .gitignore
+        let mut file = OpenOptions::new().append(true).open(&gitignore_path)?;
+
+        // Add newline if file doesn't end with one
+        if !content.ends_with('\n') {
+            writeln!(file)?;
+        }
+        writeln!(file, ".claude/")?;
+        println!("Added '.claude/' to .gitignore\n");
+    } else {
+        println!();
+    }
+
+    Ok(())
+}
+
 /// Starts the REPL session for a project
 pub fn start_session(project_name: &str) -> Result<()> {
     let mut project = Project::open_or_create(project_name)?;
@@ -700,6 +749,10 @@ pub fn start_session(project_name: &str) -> Result<()> {
     );
 
     let mut session = Session::new(project)?;
+
+    // Check .gitignore and offer to add .claude/ if needed
+    check_gitignore(&session.working_dir)?;
+
     let token_count = session.compile_context()?;
     println!("Injected context (~{} tokens)\n", token_count);
 
